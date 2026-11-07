@@ -48,7 +48,7 @@ jobs:
         run: |
           msbuild MoonCancer.Launcher\MoonCancer.Launcher.vcxproj /p:Configuration=Release /p:Platform=x64 /m /nologo /v:m
           if ($LASTEXITCODE -ne 0) { throw "编译失败（exit $LASTEXITCODE）" }
-          $exe = 'MoonCancer.Launcher\bin\x64\Release\Moon Cancer.exe'
+          $exe = 'MoonCancer.Launcher\bin\x64\Release\MoonCancer.exe'
           if (-not (Test-Path $exe)) { throw "编译失败：未找到 $exe" }
           Get-Item $exe | Select-Object Name, Length, LastWriteTime
 
@@ -60,8 +60,8 @@ jobs:
           body: |
             Launcher v${{ github.event.inputs.version }}
 
-            下载 `Moon Cancer.exe`，放到安装目录（`version.ini` 与 `app-*` 文件夹所在目录）使用。
-          artifacts: ${{ github.workspace }}\MoonCancer.Launcher\bin\x64\Release\Moon Cancer.exe
+            下载 `MoonCancer.exe`，放到安装目录（`version.ini` 与 `app-*` 文件夹所在目录）使用。
+          artifacts: ${{ github.workspace }}\MoonCancer.Launcher\bin\x64\Release\MoonCancer.exe
           draft: false
           prerelease: false
           allowUpdates: true
