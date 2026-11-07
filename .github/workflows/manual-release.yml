@@ -1,0 +1,92 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 1.1.0），用于 exe 属性、标签与发布"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: 校验版本号并更新 .rc 资源版本
+        shell: pwsh
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if ($env:VERSION -notmatch '^\d+(\.\d+){1,3}$') {
+            throw "版本号格式应为 x.y.z，收到: '$env:VERSION'"
+          }
+          $parts = $env:VERSION.Split('.')
+          while ($parts.Count -lt 4) { $parts += '0' }
+          $quad = $parts -join ','
+          $dotted = $parts -join '.'
+          $rcPath = 'MoonCancer.Launcher\MoonCancer.Launcher.rc'
+          # rc 文件为 UTF-16 LE（带 BOM），Get-Content 自动识别，回写用 Unicode 保持编码
+          $content = Get-Content $rcPath -Raw
+          $content = $content -replace '(?<=FILEVERSION )\d+,\d+,\d+,\d+', $quad
+          $content = $content -replace '(?<=PRODUCTVERSION )\d+,\d+,\d+,\d+', $quad
+          $content = $content -replace '(?<=VALUE "FileVersion", ")\d+\.\d+\.\d+\.\d+', $dotted
+          $content = $content -replace '(?<=VALUE "ProductVersion", ")\d+\.\d+\.\d+\.\d+', $dotted
+          Set-Content -Path $rcPath -Value $content -Encoding Unicode
+          Write-Output "rc 版本 => $dotted"
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release x64)
+        shell: pwsh
+        run: |
+          msbuild MoonCancer.Launcher\MoonCancer.Launcher.vcxproj /p:Configuration=Release /p:Platform=x64 /m /nologo /v:m
+          if ($LASTEXITCODE -ne 0) { throw "编译失败（exit $LASTEXITCODE）" }
+          $exe = 'MoonCancer.Launcher\bin\x64\Release\Moon Cancer.exe'
+          if (-not (Test-Path $exe)) { throw "编译失败：未找到 $exe" }
+          Get-Item $exe | Select-Object Name, Length, LastWriteTime
+
+      - name: Zip
+        id: zip
+        shell: pwsh
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          $zipName = "MoonCancerLauncher_v${env:VERSION}.zip"
+          Compress-Archive -Path 'MoonCancer.Launcher\bin\x64\Release\Moon Cancer.exe' -DestinationPath $zipName -Force
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "zipPath=$zipName"
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ github.event.inputs.version }}
+          name: MoonCancerLauncher v${{ github.event.inputs.version }}
+          body: |
+            Launcher v${{ github.event.inputs.version }}
+
+            下载 `MoonCancerLauncher_v${{ github.event.inputs.version }}.zip`，解压得到 `Moon Cancer.exe`，放到安装目录（`version.ini` 与 `app-*` 文件夹所在目录）使用。
+          artifacts: ${{ steps.zip.outputs.zipPath }}
+          draft: false
+          prerelease: false
+          allowUpdates: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 同步 .rc 版本号到仓库
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MoonCancer.Launcher/MoonCancer.Launcher.rc
+          if (git diff --cached --quiet) {
+            Write-Output "rc 无变化，跳过提交"
+          } else {
+            git commit -m "chore: 发布 v${{ github.event.inputs.version }}"
+            git push origin HEAD:master
+          }
