@@ -52,16 +52,6 @@ jobs:
           if (-not (Test-Path $exe)) { throw "编译失败：未找到 $exe" }
           Get-Item $exe | Select-Object Name, Length, LastWriteTime
 
-      - name: Zip
-        id: zip
-        shell: pwsh
-        env:
-          VERSION: ${{ github.event.inputs.version }}
-        run: |
-          $zipName = "MoonCancerLauncher_v${env:VERSION}.zip"
-          Compress-Archive -Path 'MoonCancer.Launcher\bin\x64\Release\Moon Cancer.exe' -DestinationPath $zipName -Force
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "zipPath=$zipName"
-
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
@@ -70,8 +60,8 @@ jobs:
           body: |
             Launcher v${{ github.event.inputs.version }}
 
-            下载 `MoonCancerLauncher_v${{ github.event.inputs.version }}.zip`，解压得到 `Moon Cancer.exe`，放到安装目录（`version.ini` 与 `app-*` 文件夹所在目录）使用。
-          artifacts: ${{ steps.zip.outputs.zipPath }}
+            下载 `Moon Cancer.exe`，放到安装目录（`version.ini` 与 `app-*` 文件夹所在目录）使用。
+          artifacts: ${{ github.workspace }}\MoonCancer.Launcher\bin\x64\Release\Moon Cancer.exe
           draft: false
           prerelease: false
           allowUpdates: true
