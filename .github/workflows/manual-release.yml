@@ -68,6 +68,20 @@ jobs:
           replacesArtifacts: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 标记为 latest
+        # GitHub 默认按 created_at 判定 latest，旧 release 时间可能更新，需显式指派
+        shell: pwsh
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $headers = @{ Authorization = "token $env:GITHUB_TOKEN"; Accept = "application/vnd.github+json" }
+          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/v$env:VERSION" -Headers $headers
+          Invoke-RestMethod -Method Patch `
+            -Uri "https://api.github.com/repos/${{ github.repository }}/releases/$($rel.id)" `
+            -Headers $headers -Body '{"make_latest":"true"}' -ContentType "application/json"
+          Write-Output "v$env:VERSION 已标记为 latest"
+
       - name: 同步 .rc 版本号到仓库
         continue-on-error: true
         run: |
