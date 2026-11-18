@@ -214,14 +214,37 @@ bool IsAlreadyRunning()
 		pe.dwSize = sizeof(PROCESSENTRY32);
 
 		// 遍历进程列表
-		// 注意：Nuitka --onefile 模式下存在引导进程和实际进程两个同名进程，
-		// 只有实际进程拥有窗口，因此需要遍历所有同名进程，找到拥有窗口的那个
+		// 注意：启动器与目标程序同名（均为 MoonCancer.exe），需要排除：
+		// 1. 自身进程（否则启动器会把自己误判为"目标已在运行"而拒绝启动）
+		// 2. 与本启动器同路径的其他启动器副本
+		// 其余同名进程才视为目标程序（含托盘隐藏等无窗口状态）
+		wchar_t selfPath[MAX_PATH] = {};
+		GetModuleFileNameW(NULL, selfPath, MAX_PATH);
+		DWORD selfPid = GetCurrentProcessId();
 		bool processFound = false;
 		bool windowRestored = false;
 		if (Process32First(hSnapshot, &pe)) {
 			do {
 				// 检查是否有目标程序的进程
-				if (_wcsicmp(pe.szExeFile, L"MoonCancer.exe") == 0) { // 替换为目标启动器的实际可执行文件名
+				if (_wcsicmp(pe.szExeFile, L"MoonCancer.exe") != 0) {
+					continue;
+				}
+				if (pe.th32ProcessID == selfPid) {
+					continue;
+				}
+				wchar_t procPath[MAX_PATH] = {};
+				DWORD procPathLen = MAX_PATH;
+				HANDLE ph = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
+				if (ph) {
+					if (QueryFullProcessImageNameW(ph, 0, procPath, &procPathLen)
+						&& _wcsicmp(procPath, selfPath) == 0) {
+						// 另一个启动器副本
+						CloseHandle(ph);
+						continue;
+					}
+					CloseHandle(ph);
+				}
+				{
 					processFound = true;
 					// 获取主窗口句柄
 					HWND hWnd = GetMainWindowHandle(pe.th32ProcessID);
