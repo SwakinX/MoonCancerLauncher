@@ -342,22 +342,28 @@ int wmain(int argc, wchar_t* argv[])
 
 	if (run_exe.length())
 	{
-		// 剥掉命令行第一个 token（exe 自身），剩余部分原样转发给目标程序
-		// 旧写法 substr(argv[0].length() + 2) 依赖 exe 路径带引号，不带引号启动时会切坏参数
-		std::wstring cmd_line = GetCommandLine();
-		size_t pos = 0;
-		if (!cmd_line.empty() && cmd_line[0] == L'"') {
-			pos = cmd_line.find(L'"', 1);
-			pos = (pos == std::wstring::npos) ? cmd_line.length() : pos + 1;
+		// 从 argv 重建转发参数：跳过 argv[0]（exe 自身）与启动器自用的 --trace
+		// （目标程序的 argparse 不认识 --trace，收到会报错退出）；
+		// 含空格或引号的参数重新加引号，保证目标程序解析一致
+		std::wstring arg;
+		for (size_t i = 1; i < argc; i++)
+		{
+			if (!wcscmp(argv[i], L"--trace")) {
+				continue;
+			}
+			if (!arg.empty()) {
+				arg += L' ';
+			}
+			std::wstring a = argv[i];
+			if (a.find(L' ') != std::wstring::npos || a.find(L'"') != std::wstring::npos) {
+				arg += L'"';
+				arg += a;
+				arg += L'"';
+			}
+			else {
+				arg += a;
+			}
 		}
-		else {
-			pos = cmd_line.find(L' ');
-			pos = (pos == std::wstring::npos) ? cmd_line.length() : pos;
-		}
-		while (pos < cmd_line.length() && cmd_line[pos] == L' ') {
-			pos++;
-		}
-		std::wstring arg = cmd_line.substr(pos);
 		Log(L"arg: " + arg);
 		Log(L"Starting process with admin privileges");
 		RunAsAdmin(run_exe, arg);
