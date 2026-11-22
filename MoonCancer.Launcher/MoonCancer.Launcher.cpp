@@ -342,15 +342,11 @@ int wmain(int argc, wchar_t* argv[])
 
 	if (run_exe.length())
 	{
-		// 从 argv 重建转发参数：跳过 argv[0]（exe 自身）与启动器自用的 --trace
-		// （目标程序的 argparse 不认识 --trace，收到会报错退出）；
-		// 含空格或引号的参数重新加引号，保证目标程序解析一致
+		// 从 argv 重建转发参数：跳过 argv[0]（exe 自身），其余全部原样转发给目标程序
+		// （不过滤任何参数；含空格或引号的参数重新加引号，保证目标程序解析一致）
 		std::wstring arg;
 		for (size_t i = 1; i < argc; i++)
 		{
-			if (!wcscmp(argv[i], L"--trace")) {
-				continue;
-			}
 			if (!arg.empty()) {
 				arg += L' ';
 			}
